@@ -1,0 +1,164 @@
+# ============================================================
+# Armado Quant — Agent Docker Compose
+# ============================================================
+# Coordinator (port 18800) polls every 5 min.
+# All other agents are task-driven — they sleep until assigned work.
+# ============================================================
+
+x-agent-defaults: &agent-defaults
+  build: .                      # builds from local Dockerfile + runner.py
+  restart: unless-stopped
+  networks:
+    - quant-net
+  environment: &agent-env
+    CLAUDE_API_KEY:       ${CLAUDE_API_KEY}
+    MIDDLEWARE_BASE_URL:  ${MIDDLEWARE_BASE_URL:-https://brightcore.my}
+
+services:
+
+  coordinator:
+    <<: *agent-defaults
+    container_name: quant_coordinator
+    volumes:
+      - ./coordinator/workspace:/home/agent/workspace:ro
+    environment:
+      <<: *agent-env
+      OPENCLAW_AGENT_ID:   coordinator
+      OPENCLAW_AGENT_NAME: "Coordinator"
+      MIDDLEWARE_API_KEY:  ${COORDINATOR_API_KEY}
+    ports:
+      - "${COORDINATOR_PORT:-18800}:18800"
+
+  quant-researcher:
+    <<: *agent-defaults
+    container_name: quant_researcher
+    volumes:
+      - ./quant-researcher/workspace:/home/agent/workspace:ro
+    environment:
+      <<: *agent-env
+      OPENCLAW_AGENT_ID:   quant-researcher
+      OPENCLAW_AGENT_NAME: "Quant Researcher"
+      MIDDLEWARE_API_KEY:  ${QUANT_RESEARCHER_API_KEY}
+    ports:
+      - "${QUANT_RESEARCHER_PORT:-18801}:18800"
+
+  backtester:
+    <<: *agent-defaults
+    container_name: quant_backtester
+    volumes:
+      - ./backtester/workspace:/home/agent/workspace:ro
+    environment:
+      <<: *agent-env
+      OPENCLAW_AGENT_ID:   backtester
+      OPENCLAW_AGENT_NAME: "Backtester"
+      MIDDLEWARE_API_KEY:  ${BACKTESTER_API_KEY}
+    ports:
+      - "${BACKTESTER_PORT:-18802}:18800"
+
+  risk-officer:
+    <<: *agent-defaults
+    container_name: quant_risk_officer
+    volumes:
+      - ./risk-officer/workspace:/home/agent/workspace:ro
+    environment:
+      <<: *agent-env
+      OPENCLAW_AGENT_ID:   risk-officer
+      OPENCLAW_AGENT_NAME: "Risk Officer"
+      MIDDLEWARE_API_KEY:  ${RISK_OFFICER_API_KEY}
+    ports:
+      - "${RISK_OFFICER_PORT:-18803}:18800"
+
+  signal-engineer:
+    <<: *agent-defaults
+    container_name: quant_signal_engineer
+    volumes:
+      - ./signal-engineer/workspace:/home/agent/workspace:ro
+    environment:
+      <<: *agent-env
+      OPENCLAW_AGENT_ID:   signal-engineer
+      OPENCLAW_AGENT_NAME: "Signal Engineer"
+      MIDDLEWARE_API_KEY:  ${SIGNAL_ENGINEER_API_KEY}
+    ports:
+      - "${SIGNAL_ENGINEER_PORT:-18804}:18800"
+
+  execution-engineer:
+    <<: *agent-defaults
+    container_name: quant_execution_engineer
+    volumes:
+      - ./execution-engineer/workspace:/home/agent/workspace:ro
+    environment:
+      <<: *agent-env
+      OPENCLAW_AGENT_ID:   execution-engineer
+      OPENCLAW_AGENT_NAME: "Execution Engineer"
+      MIDDLEWARE_API_KEY:  ${EXECUTION_ENGINEER_API_KEY}
+    ports:
+      - "${EXECUTION_ENGINEER_PORT:-18805}:18800"
+
+  market-analyst:
+    <<: *agent-defaults
+    container_name: quant_market_analyst
+    volumes:
+      - ./market-analyst/workspace:/home/agent/workspace:ro
+    environment:
+      <<: *agent-env
+      OPENCLAW_AGENT_ID:   market-analyst
+      OPENCLAW_AGENT_NAME: "Market Analyst"
+      MIDDLEWARE_API_KEY:  ${MARKET_ANALYST_API_KEY}
+    ports:
+      - "${MARKET_ANALYST_PORT:-18806}:18800"
+
+  algorithm-designer:
+    <<: *agent-defaults
+    container_name: quant_algorithm_designer
+    volumes:
+      - ./algorithm-designer/workspace:/home/agent/workspace:ro
+    environment:
+      <<: *agent-env
+      OPENCLAW_AGENT_ID:   algorithm-designer
+      OPENCLAW_AGENT_NAME: "Algorithm Designer"
+      MIDDLEWARE_API_KEY:  ${ALGORITHM_DESIGNER_API_KEY}
+    ports:
+      - "${ALGORITHM_DESIGNER_PORT:-18807}:18800"
+
+  portfolio-manager:
+    <<: *agent-defaults
+    container_name: quant_portfolio_manager
+    volumes:
+      - ./portfolio-manager/workspace:/home/agent/workspace:ro
+    environment:
+      <<: *agent-env
+      OPENCLAW_AGENT_ID:   portfolio-manager
+      OPENCLAW_AGENT_NAME: "Portfolio Manager"
+      MIDDLEWARE_API_KEY:  ${PORTFOLIO_MANAGER_API_KEY}
+    ports:
+      - "${PORTFOLIO_MANAGER_PORT:-18808}:18800"
+
+  data-quality-monitor:
+    <<: *agent-defaults
+    container_name: quant_data_quality_monitor
+    volumes:
+      - ./data-quality-monitor/workspace:/home/agent/workspace:ro
+    environment:
+      <<: *agent-env
+      OPENCLAW_AGENT_ID:   data-quality-monitor
+      OPENCLAW_AGENT_NAME: "Data Quality Monitor"
+      MIDDLEWARE_API_KEY:  ${DATA_QUALITY_MONITOR_API_KEY}
+    ports:
+      - "${DATA_QUALITY_MONITOR_PORT:-18809}:18800"
+
+  onchain-sentiment-analyst:
+    <<: *agent-defaults
+    container_name: quant_onchain_sentiment
+    volumes:
+      - ./onchain-sentiment-analyst/workspace:/home/agent/workspace:ro
+    environment:
+      <<: *agent-env
+      OPENCLAW_AGENT_ID:   onchain-sentiment-analyst
+      OPENCLAW_AGENT_NAME: "On-Chain & Sentiment Analyst"
+      MIDDLEWARE_API_KEY:  ${ONCHAIN_SENTIMENT_API_KEY}
+    ports:
+      - "${ONCHAIN_SENTIMENT_PORT:-18810}:18800"
+
+networks:
+  quant-net:
+    driver: bridge
