@@ -37,6 +37,7 @@ x-plumbing-env: &plumbing-env
 services:
 
   # ── ⚙️  PLUMBING AGENTS (Gemini Flash) ─────────────────────
+  # Staggered 30s apart — no rate limit issues on Gemini
 
   coordinator:
     <<: *agent-defaults
@@ -48,6 +49,7 @@ services:
       OPENCLAW_AGENT_ID:   coordinator
       OPENCLAW_AGENT_NAME: "Coordinator"
       MIDDLEWARE_API_KEY:  ${COORDINATOR_API_KEY}
+      STARTUP_DELAY:       "0"
     ports:
       - "${COORDINATOR_PORT:-18800}:18800"
 
@@ -61,6 +63,7 @@ services:
       OPENCLAW_AGENT_ID:   market-analyst
       OPENCLAW_AGENT_NAME: "Market Analyst"
       MIDDLEWARE_API_KEY:  ${MARKET_ANALYST_API_KEY}
+      STARTUP_DELAY:       "30"
     ports:
       - "${MARKET_ANALYST_PORT:-18806}:18800"
 
@@ -74,6 +77,7 @@ services:
       OPENCLAW_AGENT_ID:   data-quality-monitor
       OPENCLAW_AGENT_NAME: "Data Quality Monitor"
       MIDDLEWARE_API_KEY:  ${DATA_QUALITY_MONITOR_API_KEY}
+      STARTUP_DELAY:       "60"
     ports:
       - "${DATA_QUALITY_MONITOR_PORT:-18809}:18800"
 
@@ -87,6 +91,7 @@ services:
       OPENCLAW_AGENT_ID:   portfolio-manager
       OPENCLAW_AGENT_NAME: "Portfolio Manager"
       MIDDLEWARE_API_KEY:  ${PORTFOLIO_MANAGER_API_KEY}
+      STARTUP_DELAY:       "90"
     ports:
       - "${PORTFOLIO_MANAGER_PORT:-18808}:18800"
 
@@ -100,10 +105,12 @@ services:
       OPENCLAW_AGENT_ID:   onchain-sentiment-analyst
       OPENCLAW_AGENT_NAME: "On-Chain & Sentiment Analyst"
       MIDDLEWARE_API_KEY:  ${ONCHAIN_SENTIMENT_API_KEY}
+      STARTUP_DELAY:       "120"
     ports:
       - "${ONCHAIN_SENTIMENT_PORT:-18810}:18800"
 
   # ── 🧠 BRAIN AGENTS (Claude Sonnet 4.6) ────────────────────
+  # Staggered 60s apart — Anthropic rate limits are tighter
 
   quant-researcher:
     <<: *agent-defaults
@@ -115,6 +122,7 @@ services:
       OPENCLAW_AGENT_ID:   quant-researcher
       OPENCLAW_AGENT_NAME: "Quant Researcher"
       MIDDLEWARE_API_KEY:  ${QUANT_RESEARCHER_API_KEY}
+      STARTUP_DELAY:       "60"
     ports:
       - "${QUANT_RESEARCHER_PORT:-18801}:18800"
 
@@ -128,6 +136,7 @@ services:
       OPENCLAW_AGENT_ID:   backtester
       OPENCLAW_AGENT_NAME: "Backtester"
       MIDDLEWARE_API_KEY:  ${BACKTESTER_API_KEY}
+      STARTUP_DELAY:       "120"
     ports:
       - "${BACKTESTER_PORT:-18802}:18800"
 
@@ -141,6 +150,7 @@ services:
       OPENCLAW_AGENT_ID:   algorithm-designer
       OPENCLAW_AGENT_NAME: "Algorithm Designer"
       MIDDLEWARE_API_KEY:  ${ALGORITHM_DESIGNER_API_KEY}
+      STARTUP_DELAY:       "180"
     ports:
       - "${ALGORITHM_DESIGNER_PORT:-18807}:18800"
 
@@ -154,6 +164,7 @@ services:
       OPENCLAW_AGENT_ID:   signal-engineer
       OPENCLAW_AGENT_NAME: "Signal Engineer"
       MIDDLEWARE_API_KEY:  ${SIGNAL_ENGINEER_API_KEY}
+      STARTUP_DELAY:       "240"
     ports:
       - "${SIGNAL_ENGINEER_PORT:-18804}:18800"
 
@@ -167,6 +178,7 @@ services:
       OPENCLAW_AGENT_ID:   risk-officer
       OPENCLAW_AGENT_NAME: "Risk Officer"
       MIDDLEWARE_API_KEY:  ${RISK_OFFICER_API_KEY}
+      STARTUP_DELAY:       "300"
     ports:
       - "${RISK_OFFICER_PORT:-18803}:18800"
 
@@ -180,6 +192,7 @@ services:
       OPENCLAW_AGENT_ID:   execution-engineer
       OPENCLAW_AGENT_NAME: "Execution Engineer"
       MIDDLEWARE_API_KEY:  ${EXECUTION_ENGINEER_API_KEY}
+      STARTUP_DELAY:       "360"
     ports:
       - "${EXECUTION_ENGINEER_PORT:-18805}:18800"
 
