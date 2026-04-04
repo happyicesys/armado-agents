@@ -2,7 +2,12 @@
 """
 Armado Quant — Agent Runner
 Each Docker container runs this script.
-Reads workspace files → calls Claude with tool use → executes middleware API calls.
+Reads workspace files → calls LLM with tool use → executes middleware API calls.
+
+Provider routing (set via CLAUDE_MODEL env var):
+  claude-*     → Anthropic API  (brain agents: researcher, risk, signal, execution, backtest, algo)
+  gemini-*     → Google Gemini via OpenAI-compatible endpoint  (plumbing agents)
+  gpt-*        → OpenAI API  (fallback plumbing option)
 """
 
 import json
@@ -12,18 +17,24 @@ import re
 import time
 from pathlib import Path
 
-import anthropic
 import requests
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-WORKSPACE         = Path('/home/agent/workspace')
-MIDDLEWARE_URL    = os.environ['MIDDLEWARE_BASE_URL'].rstrip('/')
-MIDDLEWARE_KEY    = os.environ['MIDDLEWARE_API_KEY']
-CLAUDE_API_KEY    = os.environ['CLAUDE_API_KEY']
-AGENT_ID          = os.environ['OPENCLAW_AGENT_ID']
-AGENT_NAME        = os.environ.get('OPENCLAW_AGENT_NAME', AGENT_ID)
-MODEL             = os.environ.get('CLAUDE_MODEL', 'claude-sonnet-4-6')
+WORKSPACE      = Path('/home/agent/workspace')
+MIDDLEWARE_URL = os.environ['MIDDLEWARE_BASE_URL'].rstrip('/')
+MIDDLEWARE_KEY = os.environ['MIDDLEWARE_API_KEY']
+AGENT_ID       = os.environ['OPENCLAW_AGENT_ID']
+AGENT_NAME     = os.environ.get('OPENCLAW_AGENT_NAME', AGENT_ID)
+MODEL          = os.environ.get('CLAUDE_MODEL', 'claude-sonnet-4-6')
+
+# Auto-detect provider from model name
+if MODEL.startswith('gemini'):
+    PROVIDER = 'gemini'
+elif MODEL.startswith('gpt') or MODEL.startswith('o1') or MODEL.startswith('o3'):
+    PROVIDER = 'openai'
+else:
+    PROVIDER = 'anthropic'
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,7 +42,32 @@ logging.basicConfig(
     datefmt='%Y-%m-%dT%H:%M:%SZ',
 )
 log = logging.getLogger(AGENT_ID)
-claude = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+
+# ─── LLM Client Init ─────────────────────────────────────────────────────────
+
+if PROVIDER == 'anthropic':
+    import anthropic
+    CLAUDE_API_KEY = os.environ['CLAUDE_API_KEY']
+    llm = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
+    MAX_TOKENS = int(os.environ.get('MAX_TOKENS', '4096'))  # brain agents need room to think
+    log.info(f"Provider: Anthropic | Model: {MODEL}")
+
+elif PROVIDER == 'gemini':
+    from openai import OpenAI as _OAI
+    GEMINI_API_KEY = os.environ['GEMINI_API_KEY']
+    llm = _OAI(
+        api_key=GEMINI_API_KEY,
+        base_url='https://generativelanguage.googleapis.com/v1beta/openai/',
+    )
+    MAX_TOKENS = int(os.environ.get('MAX_TOKENS', '1024'))  # plumbing agents are simple
+    log.info(f"Provider: Gemini (OpenAI-compat) | Model: {MODEL}")
+
+elif PROVIDER == 'openai':
+    from openai import OpenAI as _OAI
+    OPENAI_API_KEY = os.environ['OPENAI_API_KEY']
+    llm = _OAI(api_key=OPENAI_API_KEY)
+    MAX_TOKENS = int(os.environ.get('MAX_TOKENS', '1024'))
+    log.info(f"Provider: OpenAI | Model: {MODEL}")
 
 # ─── Workspace ───────────────────────────────────────────────────────────────
 
@@ -66,7 +102,7 @@ def mw(method: str, path: str, **kwargs) -> dict:
         log.error(f"{method} {path} failed: {e}")
         return {'error': str(e)}
 
-# ─── Tool definitions (what Claude can call) ─────────────────────────────────
+# ─── Tool definitions (shared across all providers) ──────────────────────────
 
 TOOLS = [
     {
@@ -257,7 +293,7 @@ TOOLS = [
     },
 ]
 
-# ─── Tool execution ───────────────────────────────────────────────────────────
+# ─── Tool execution (shared across all providers) ────────────────────────────
 
 def execute_tool(name: str, inp: dict) -> str:
     log.info(f"→ {name}({json.dumps(inp)[:120]})")
@@ -323,10 +359,11 @@ def execute_tool(name: str, inp: dict) -> str:
     log.info(f"← {name}: {json.dumps(result)[:120]}")
     return json.dumps(result)
 
-# ─── Agent cycle ─────────────────────────────────────────────────────────────
+# ─── Agent cycle — Anthropic ─────────────────────────────────────────────────
 
-def run_cycle(system_prompt: str):
-    now = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+def run_cycle_anthropic(system_prompt: str):
+    """Brain agents: Claude Sonnet — deep reasoning, complex multi-step work."""
+    now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     user_message = (
         f"Agent: {AGENT_NAME} | ID: {AGENT_ID} | Time: {now}\n\n"
         "Begin your cycle per your AGENTS.md instructions:\n"
@@ -337,15 +374,20 @@ def run_cycle(system_prompt: str):
         "Use tools to interact with the middleware. Be concise and efficient."
     )
 
-    messages = [{"role": "user", "content": user_message}]
-    max_rounds = 15  # hard cap — prevents runaway loops
+    anthropic_tools = [
+        {"name": t["name"], "description": t["description"], "input_schema": t["input_schema"]}
+        for t in TOOLS
+    ]
 
-    for round_num in range(max_rounds):
-        response = claude.messages.create(
+    messages = [{"role": "user", "content": user_message}]
+    max_rounds = 15
+
+    for _ in range(max_rounds):
+        response = llm.messages.create(
             model=MODEL,
-            max_tokens=4096,
+            max_tokens=MAX_TOKENS,
             system=system_prompt,
-            tools=TOOLS,
+            tools=anthropic_tools,
             messages=messages,
         )
 
@@ -372,12 +414,87 @@ def run_cycle(system_prompt: str):
             log.warning(f"Unexpected stop_reason: {response.stop_reason}")
             break
 
+# ─── Agent cycle — OpenAI-compatible (Gemini / GPT) ──────────────────────────
+
+def run_cycle_openai_compat(system_prompt: str):
+    """Plumbing agents: Gemini Flash / GPT-4o-mini — fast, cheap, reliable routing."""
+    now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+
+    openai_tools = [
+        {
+            "type": "function",
+            "function": {
+                "name":        t["name"],
+                "description": t["description"],
+                "parameters":  t["input_schema"],
+            },
+        }
+        for t in TOOLS
+    ]
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": (
+                f"Agent: {AGENT_NAME} | ID: {AGENT_ID} | Time: {now}\n\n"
+                "Begin your cycle per your AGENTS.md instructions:\n"
+                "1. Call post_heartbeat first\n"
+                "2. Check for pending tasks assigned to you\n"
+                "3. Execute your scheduled duties or work on tasks\n"
+                "4. Update task statuses when done\n"
+                "Use tools to interact with the middleware. Be concise and efficient."
+            ),
+        },
+    ]
+    max_rounds = 15
+
+    for _ in range(max_rounds):
+        response = llm.chat.completions.create(
+            model=MODEL,
+            max_tokens=MAX_TOKENS,
+            tools=openai_tools,
+            tool_choice="auto",
+            messages=messages,
+        )
+
+        choice = response.choices[0]
+        messages.append({"role": "assistant", "content": choice.message.content, "tool_calls": choice.message.tool_calls})
+
+        if choice.finish_reason == 'stop':
+            if choice.message.content:
+                log.info(f"Done: {choice.message.content[:300]}")
+            break
+
+        if choice.finish_reason == 'tool_calls' and choice.message.tool_calls:
+            for tc in choice.message.tool_calls:
+                try:
+                    args = json.loads(tc.function.arguments)
+                except json.JSONDecodeError:
+                    args = {}
+                result = execute_tool(tc.function.name, args)
+                messages.append({
+                    "role":         "tool",
+                    "tool_call_id": tc.id,
+                    "content":      result,
+                })
+        else:
+            log.warning(f"Unexpected finish_reason: {choice.finish_reason}")
+            break
+
+# ─── Unified cycle dispatcher ─────────────────────────────────────────────────
+
+def run_cycle(system_prompt: str):
+    if PROVIDER == 'anthropic':
+        run_cycle_anthropic(system_prompt)
+    else:
+        run_cycle_openai_compat(system_prompt)
+
 # ─── Main loop ───────────────────────────────────────────────────────────────
 
 def main():
-    log.info(f"Starting — {AGENT_NAME} ({AGENT_ID})")
+    log.info(f"Starting — {AGENT_NAME} ({AGENT_ID}) | Provider: {PROVIDER} | Model: {MODEL}")
 
-    # Stagger startup so all 11 agents don't hammer Claude simultaneously
     startup_delay = int(os.environ.get('STARTUP_DELAY', 0))
     if startup_delay:
         log.info(f"Startup delay: {startup_delay}s")
@@ -387,7 +504,7 @@ def main():
     interval      = parse_interval(heartbeat_md)
     system_prompt = f"{soul}\n\n---\n\n{agents_md}"
 
-    log.info(f"Interval: {interval}s ({interval // 60} min) | Model: {MODEL}")
+    log.info(f"Interval: {interval}s ({interval // 60} min)")
 
     # Initial heartbeat before first cycle
     mw('POST', 'agents/heartbeat')
@@ -397,13 +514,12 @@ def main():
             log.info("─── Cycle start ───")
             run_cycle(system_prompt)
             log.info("─── Cycle end ───")
-        except anthropic.RateLimitError:
-            log.warning("Rate limited — sleeping 60s before retry")
-            time.sleep(60)
-            continue
-        except anthropic.APIError as e:
-            log.error(f"Claude API error: {e}")
         except Exception as e:
+            # Rate limits
+            if 'rate' in str(e).lower() or '429' in str(e):
+                log.warning(f"Rate limited — sleeping 60s: {e}")
+                time.sleep(60)
+                continue
             log.error(f"Cycle error: {e}", exc_info=True)
 
         log.info(f"Sleeping {interval}s")
