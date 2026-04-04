@@ -151,11 +151,13 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "level":   {"type": "string", "enum": ["info", "warning", "critical"]},
-                "message": {"type": "string"},
-                "context": {"type": "object"},
+                "type":               {"type": "string", "description": "Short alert type, e.g. TASK_FAILURE, DATA_QUALITY, CIRCUIT_BREAKER"},
+                "severity":           {"type": "string", "enum": ["INFO", "WARNING", "CRITICAL"]},
+                "description":        {"type": "string", "description": "Full description of the alert condition"},
+                "symbol":             {"type": "string", "description": "Optional trading symbol if relevant"},
+                "recommended_action": {"type": "string", "description": "Optional suggested remediation"},
             },
-            "required": ["level", "message"],
+            "required": ["type", "severity", "description"],
         },
     },
     {
@@ -288,6 +290,7 @@ def execute_tool(name: str, inp: dict) -> str:
         result = mw('POST', 'signals', json=inp)
 
     elif name == "post_alert":
+        inp.setdefault('agent_id', AGENT_ID)
         result = mw('POST', 'alerts', json=inp)
 
     elif name == "post_research_finding":

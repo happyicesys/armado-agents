@@ -103,7 +103,7 @@ POST /api/tasks
   "title": "<concise task title>",
   "assigned_to": "<agent-id>",
   "created_by": "coordinator",
-  "priority": "urgent" | "high" | "normal",
+  "priority": "critical" | "high" | "medium" | "low",
   "payload": {
     "reason": "<what triggered this task>",
     "context": "<relevant data from overview, e.g., signal IDs, metric values>",
@@ -113,9 +113,10 @@ POST /api/tasks
 ```
 
 **Priority rules:**
-- `urgent` — halt conditions, circuit breaker, CRITICAL data quality
+- `critical` — halt conditions, circuit breaker, CRITICAL data quality
 - `high` — pending signals, approved signals awaiting execution
-- `normal` — everything else
+- `medium` — monitoring tasks, overdue reports
+- `low` — proactive research, idle-cycle work
 
 ---
 
