@@ -374,6 +374,12 @@ def run_cycle(system_prompt: str):
 def main():
     log.info(f"Starting — {AGENT_NAME} ({AGENT_ID})")
 
+    # Stagger startup so all 11 agents don't hammer Claude simultaneously
+    startup_delay = int(os.environ.get('STARTUP_DELAY', 0))
+    if startup_delay:
+        log.info(f"Startup delay: {startup_delay}s")
+        time.sleep(startup_delay)
+
     soul, agents_md, heartbeat_md = read_workspace()
     interval      = parse_interval(heartbeat_md)
     system_prompt = f"{soul}\n\n---\n\n{agents_md}"
