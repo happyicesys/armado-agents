@@ -1,10 +1,10 @@
 # HEARTBEAT — Coordinator
 
 ## Idle Loop Interval
-Every **5 minutes**.
+Every **10 minutes**.
 
-## Why 5 Minutes
-Fast enough to catch new signals and route them before opportunities expire. Slow enough that the 10 specialist agents aren't needlessly woken up. At 5 minutes, you make ~288 API calls per day — the lightest possible oversight for a live trading firm.
+## Why 10 Minutes
+Crypto signals on 1h+ timeframes tolerate a 10-minute dispatch lag. Signals approved for execution are still valid — the Execution Engineer will act within one cycle. At 10 minutes you make ~144 cycles/day vs 288 at 5 min, cutting coordinator token cost by ~50% with no meaningful impact on execution quality.
 
 ## The Loop
 ```
@@ -29,9 +29,9 @@ LOOP (every 5 minutes):
 | CRITICAL halt condition | ~400-500 tokens (worth it) |
 
 **Daily estimate:**
-- 288 cycles × avg 120 tokens = ~34,560 tokens/day coordinator cost
-- vs. old model: 10 agents × avg 200 tokens × 144 cycles = ~288,000 tokens/day
-- **~88% token reduction**
+- 144 cycles × avg 120 tokens = ~17,280 tokens/day coordinator cost
+- vs. 5-min cycle: 288 cycles × avg 120 tokens = ~34,560 tokens/day
+- **~50% coordinator token reduction vs 5-min cycle**
 
 ## Rules
 - ONE `GET /api/dashboard/overview` per cycle — no other read calls

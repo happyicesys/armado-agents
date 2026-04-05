@@ -403,6 +403,88 @@ TOOLS = [
             "required": ["uuid", "status"],
         },
     },
+    # ── On-Chain & Sentiment ─────────────────────────────────────────────────
+    {
+        "name": "get_fear_greed",
+        "description": "Fetch the Alternative.me Fear & Greed Index (0=Extreme Fear, 100=Extreme Greed). Cached 10 min. Use as baseline sentiment for on-chain analysis.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_onchain_metrics",
+        "description": "Fetch stored on-chain metrics from the middleware. Returns exchange flows, whale activity, network metrics stored by the on-chain analyst.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "e.g. BTCUSDT (default)"},
+                "hours":  {"type": "integer", "description": "Look-back window in hours (default 24)"},
+                "type":   {"type": "string", "description": "Optional metric_type filter, e.g. EXCHANGE_FLOW, WHALE_TRANSFER"},
+            },
+        },
+    },
+    {
+        "name": "post_onchain_metrics",
+        "description": "Store on-chain metric readings. Accepts a batch of metrics. On-Chain Analyst calls this to persist derived metrics each cycle.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "metrics": {
+                    "type": "array",
+                    "description": "Array of metric objects",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "symbol":      {"type": "string", "description": "e.g. BTCUSDT"},
+                            "metric_type": {"type": "string", "description": "e.g. EXCHANGE_FLOW, WHALE_TRANSFER, FUNDING_SIGNAL, SENTIMENT_PROXY"},
+                            "value":       {"type": "number", "description": "Numeric metric value"},
+                            "metadata":    {"type": "object", "description": "Optional extra fields"},
+                            "measured_at": {"type": "string", "description": "ISO-8601 timestamp, e.g. 2025-01-01T00:00:00Z"},
+                        },
+                        "required": ["symbol", "metric_type", "value", "measured_at"],
+                    },
+                },
+            },
+            "required": ["metrics"],
+        },
+    },
+    {
+        "name": "get_sentiment_score",
+        "description": "Fetch latest sentiment scores from the middleware. Returns the most recent overall sentiment reading.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "hours": {"type": "integer", "description": "History window in hours (default 24)"},
+            },
+        },
+    },
+    {
+        "name": "post_sentiment_score",
+        "description": "Store a sentiment score reading. On-Chain Analyst calls this each cycle to record overall market sentiment.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "score":              {"type": "number",  "description": "Normalized sentiment: -1.0 (extreme fear) to +1.0 (extreme greed)"},
+                "velocity":           {"type": "number",  "description": "Change per hour (optional)"},
+                "fear_greed_index":   {"type": "integer", "description": "Raw 0-100 fear & greed index value"},
+                "dominant_narrative": {"type": "string",  "description": "Brief description of dominant market narrative"},
+                "overall_bias":       {"type": "string",  "enum": ["BULLISH", "BEARISH", "NEUTRAL"]},
+                "confidence":         {"type": "number",  "description": "0.0-1.0 confidence in the reading"},
+                "sources":            {"type": "array",   "description": "List of data sources used"},
+                "measured_at":        {"type": "string",  "description": "ISO-8601 timestamp"},
+            },
+            "required": ["score", "overall_bias", "confidence", "measured_at"],
+        },
+    },
+    {
+        "name": "get_market_funding_rate",
+        "description": "Get BTC or ETH perpetual funding rate from Binance (cached 5 min). Useful for sentiment proxy — high positive = overleveraged longs, negative = overleveraged shorts.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "e.g. BTCUSDT or ETHUSDT"},
+            },
+            "required": ["symbol"],
+        },
+    },
 ]
 
 # ─── Tool execution (shared across all providers) ────────────────────────────
@@ -489,6 +571,24 @@ def execute_tool(name: str, inp: dict) -> str:
     elif name == "update_signal_status":
         uuid = inp.pop('uuid')
         result = mw('PATCH', f'signals/{uuid}', json=inp)
+
+    elif name == "get_fear_greed":
+        result = mw('GET', 'market/fear-greed')
+
+    elif name == "get_onchain_metrics":
+        result = mw('GET', 'market/onchain', params=inp)
+
+    elif name == "post_onchain_metrics":
+        result = mw('POST', 'market/onchain', json=inp)
+
+    elif name == "get_sentiment_score":
+        result = mw('GET', 'market/sentiment', params=inp)
+
+    elif name == "post_sentiment_score":
+        result = mw('POST', 'market/sentiment', json=inp)
+
+    elif name == "get_market_funding_rate":
+        result = mw('GET', 'market/funding-rate', params=inp)
 
     else:
         result = {'error': f'Unknown tool: {name}'}

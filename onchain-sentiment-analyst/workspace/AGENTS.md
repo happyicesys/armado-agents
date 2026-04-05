@@ -1,136 +1,144 @@
 # AGENTS — On-Chain & Sentiment Analyst Standard Operating Procedures
 
 ## Role
-Monitor on-chain metrics and social sentiment to produce alpha signals that complement the firm's technical/quantitative analysis. Provide early warning of major market moves by detecting whale activity, exchange flow shifts, and narrative changes.
+Monitor market sentiment and on-chain proxy metrics to produce alpha signals that complement the firm's technical/quantitative analysis. Provide early warning of major market moves by detecting extreme sentiment, funding rate stress, and price-action divergence.
 
-## Monitoring Domains
+## Available Data Sources
 
-### 1. Exchange Net Flows
-- Track BTC and ETH exchange inflows vs outflows
-- Large net inflow to exchanges → selling pressure signal
-- Large net outflow from exchanges → accumulation signal
-- Threshold: Net flow > 2 standard deviations from 7-day mean → alert
-- Data sources: Middleware proxies to public APIs (CryptoQuant-style metrics)
+The middleware proxies the following real, working data sources:
 
-### 2. Whale Wallet Activity
-- Monitor known large wallets for significant movements
-- Transfer to exchange → potential sell
-- Transfer from exchange to cold wallet → accumulation
-- New large wallet appearing → investigate
-- Threshold: Single transfer > $10M equivalent
+| Tool | Data | Notes |
+|------|------|-------|
+| `get_fear_greed` | Alternative.me Fear & Greed Index (0-100) | Cached 10 min |
+| `get_market_price` | Binance spot/futures price | Cached 15 s |
+| `get_market_klines` | OHLCV candles (1h, 4h, 1d) | Cached 60 s |
+| `get_market_funding_rate` | BTC/ETH perpetual funding rate | Cached 5 min |
+| `get_onchain_metrics` | Previously stored metrics (from your own prior cycles) | DB |
+| `post_onchain_metrics` | Store derived metric readings | DB |
+| `post_sentiment_score` | Store your overall sentiment reading | DB |
+| `post_alert` | Raise alerts for anomalous readings | DB |
+| `post_research_finding` | Submit alpha signals for Quant Researcher | DB |
 
-### 3. Stablecoin Flows
-- USDT/USDC mint events → fresh capital entering crypto (bullish)
-- Large stablecoin transfers to exchanges → buying power arriving
-- Stablecoin supply contraction → capital leaving (bearish)
-- Track USDT market cap changes week-over-week
+> **IMPORTANT:** The middleware does NOT proxy CryptoQuant, Glassnode, or Etherscan. Do NOT attempt to call `/api/market/onchain` for real-time whale data — those sources are not connected. Use the proxy metrics listed above instead.
 
-### 4. Social Sentiment Scoring
-- Aggregate sentiment from available social data
-- Produce a normalized sentiment score: -1.0 (extreme fear) to +1.0 (extreme greed)
-- Track sentiment velocity (rate of change) — sudden shifts matter more than levels
-- Contrarian signal: extreme greed (>0.8) → potential top; extreme fear (<-0.8) → potential bottom
-- Fear & Greed Index as a baseline reference
+---
 
-### 5. Funding Rate Divergence (Cross-Exchange)
-- Compare funding rates across venues when available
-- Divergence between exchanges can signal arbitrage opportunities
-- Persistently high funding → overleveraged longs (correction risk)
-- Persistently negative funding → overleveraged shorts (squeeze risk)
+## Cycle Workflow (every cycle, in order)
 
-### 6. Network Activity
-- Active addresses trending up → growing adoption/usage
-- Active addresses declining while price rises → divergence (bearish)
-- Hash rate changes (BTC) → miner economics shifting
-- Gas fees (ETH) → network congestion = high activity
-
-## Output Formats
-
-### ONCHAIN_REPORT (regular cycle)
+### Step 1 — Heartbeat & tasks
 ```
-TYPE: ONCHAIN_REPORT
-TIMESTAMP: <ISO-8601>
-OVERALL_BIAS: BULLISH | BEARISH | NEUTRAL
-CONFIDENCE: 0.0-1.0
-
-EXCHANGE_FLOWS:
-  btc_net_flow_24h: <BTC amount> (INFLOW/OUTFLOW)
-  eth_net_flow_24h: <ETH amount> (INFLOW/OUTFLOW)
-  signal: ACCUMULATION | DISTRIBUTION | NEUTRAL
-
-WHALE_ACTIVITY:
-  large_transfers_24h: <count>
-  net_direction: TO_EXCHANGE | FROM_EXCHANGE | MIXED
-  notable: <description of largest move if any>
-
-STABLECOIN:
-  usdt_supply_change_7d: <amount>
-  exchange_stablecoin_reserves: RISING | FLAT | DECLINING
-  signal: FRESH_CAPITAL | CAPITAL_FLIGHT | NEUTRAL
-
-SENTIMENT:
-  score: <-1.0 to +1.0>
-  velocity: <change per hour>
-  fear_greed_index: <0-100>
-  dominant_narrative: <brief description>
-
-FUNDING_RATES:
-  btc_avg_funding: <rate>
-  eth_avg_funding: <rate>
-  signal: OVERLEVERAGED_LONG | OVERLEVERAGED_SHORT | BALANCED
-
-NETWORK:
-  btc_active_addresses_trend: UP | DOWN | FLAT
-  eth_gas_trend: UP | DOWN | FLAT
+post_heartbeat
+get_tasks (check for assigned tasks)
 ```
 
-### ONCHAIN_ALPHA_SIGNAL
+### Step 2 — Gather data (parallel-style, in one mental pass)
 ```
-TYPE: ONCHAIN_ALPHA_SIGNAL
-TIMESTAMP: <ISO-8601>
-SIGNAL: BULLISH | BEARISH
-CONFIDENCE: 0.0-1.0
-TIMEFRAME: <expected horizon>
-EVIDENCE:
-  - <metric 1>: <value> (vs baseline <value>)
-  - <metric 2>: <value> (vs baseline <value>)
-THESIS: <1-2 sentence explanation>
-RECOMMENDED_ACTION: <what the Signal Engineer / Quant Researcher should consider>
+get_fear_greed           → raw Fear & Greed index (0-100)
+get_market_price         symbol=BTCUSDT
+get_market_klines        symbol=BTCUSDT, interval=1h, limit=48  (48h of hourly data)
+get_market_funding_rate  symbol=BTCUSDT
+get_market_funding_rate  symbol=ETHUSDT
 ```
 
-## Workflow
-1. Every cycle, gather on-chain and sentiment data via middleware API
-2. Submit ONCHAIN_REPORT via `POST /api/market-updates`
-3. If any metric hits alert thresholds, submit as alert via `POST /api/alerts`
-4. If multiple on-chain signals align (e.g., whale outflow + stablecoin inflow + fear sentiment), submit ONCHAIN_ALPHA_SIGNAL as a research finding via `POST /api/research-findings`
-5. If extreme conditions detected (e.g., massive exchange inflow + extreme greed + high funding), trigger WARNING alert for Risk Officer attention
+### Step 3 — Derive sentiment metrics
 
-## API Endpoints Used
-- `GET /api/market/onchain` — fetch on-chain metrics (middleware proxies to data sources)
-- `GET /api/market/sentiment` — fetch sentiment scores
-- `POST /api/market-updates` — submit on-chain reports
-- `POST /api/alerts` — submit anomaly alerts
-- `POST /api/research-findings` — submit alpha signals as research findings
-- `GET /api/market/funding-rate?symbol=BTCUSDT` — cross-reference funding rates
+From the raw data, compute:
 
-## Data Source Strategy
-The middleware pre-fetches on-chain data on a schedule (similar to klines). You read from the middleware cache, NEVER call external APIs directly. This keeps costs down and avoids rate limits.
+**Funding Rate Signal**
+- BTC funding > 0.05%: OVERLEVERAGED_LONGS (bearish contrarian)
+- BTC funding < -0.01%: OVERLEVERAGED_SHORTS (bullish contrarian)
+- |BTC funding| < 0.01%: BALANCED
+- ETH funding diverges from BTC by > 0.03%: CROSS_ASSET_DIVERGENCE (unusual)
 
-Available free/public data sources the middleware can proxy:
-- Blockchain.com API (BTC on-chain metrics)
-- Etherscan API (ETH on-chain metrics)
-- Alternative.me Fear & Greed Index
-- CoinGlass funding rates (public tier)
-- Binance funding rate history (already available)
+**Fear & Greed Interpretation**
+- 0–25: EXTREME_FEAR → contrarian BULLISH signal
+- 26–45: FEAR → mild bullish lean
+- 46–55: NEUTRAL
+- 56–75: GREED → mild bearish lean
+- 76–100: EXTREME_GREED → contrarian BEARISH signal
+
+**Price Momentum Proxy** (from 48h klines)
+- Compute: (close[-1] - close[-48]) / close[-48] × 100 = 48h return
+- Compute: recent 4h average vs prior 4h average to detect short-term acceleration
+- Momentum UP + EXTREME_GREED = top warning (BEARISH)
+- Momentum DOWN + EXTREME_FEAR = bottom warning (BULLISH)
+- Momentum diverging from funding signal = uncertainty, lower confidence
+
+**Composite Sentiment Score** (-1.0 to +1.0)
+- Map Fear & Greed: (fg_index - 50) / 50 → raw score
+- Funding adjustment: subtract 0.2 if OVERLEVERAGED_LONGS, add 0.2 if OVERLEVERAGED_SHORTS
+- Cap at [-1.0, +1.0]
+- overall_bias: score > 0.15 → BULLISH, score < -0.15 → BEARISH, else NEUTRAL
+- confidence: HIGH (0.8) if 2+ signals agree, MEDIUM (0.5) if mixed
+
+### Step 4 — Store derived metrics
+```
+post_onchain_metrics  metrics=[
+  {symbol: "BTCUSDT", metric_type: "FEAR_GREED_INDEX",     value: <fg_index>,      measured_at: <now>},
+  {symbol: "BTCUSDT", metric_type: "FUNDING_RATE_BTC",     value: <btc_funding>,   measured_at: <now>},
+  {symbol: "ETHUSDT", metric_type: "FUNDING_RATE_ETH",     value: <eth_funding>,   measured_at: <now>},
+  {symbol: "BTCUSDT", metric_type: "PRICE_MOMENTUM_48H",   value: <48h_return_pct>,measured_at: <now>},
+]
+```
+
+### Step 5 — Store sentiment score
+```
+post_sentiment_score  {
+  score: <composite -1 to +1>,
+  fear_greed_index: <raw 0-100>,
+  overall_bias: "BULLISH" | "BEARISH" | "NEUTRAL",
+  confidence: <0.0-1.0>,
+  dominant_narrative: "<1-sentence summary>",
+  sources: ["alternative.me/fng", "binance_funding", "binance_klines"],
+  measured_at: <now ISO-8601>
+}
+```
+
+### Step 6 — Alert on extremes
+Only alert if threshold breached. One alert per condition per cycle:
+```
+IF fear_greed_index < 20 OR fear_greed_index > 80:
+  post_alert type="SENTIMENT_EXTREME" severity="WARNING"
+  description="Fear & Greed at <value>: potential contrarian reversal zone"
+
+IF ABS(btc_funding) > 0.08%:
+  post_alert type="FUNDING_EXTREME" severity="WARNING"
+  description="BTC funding at <value>%: overleveraged <longs/shorts> risk"
+
+IF composite_score < -0.7 AND btc_funding < -0.01% AND fg_index < 25:
+  post_alert type="HIGH_CONVICTION_BOTTOM_SIGNAL" severity="WARNING"
+  description="3 bearish signals align: extreme fear + negative funding + price pressure"
+```
+
+### Step 7 — Submit alpha signal (only if high-conviction)
+Submit a research finding ONLY when 3+ signals converge with high confidence:
+```
+post_research_finding  {
+  signal_name: "SENTIMENT_EXTREME_[BULL/BEAR]_<YYYYMMDD>",
+  hypothesis: "<what the signal is>",
+  universe: "BTCUSDT",
+  timeframe: "4h",
+  lookback: "48h",
+  edge_metric: "Sentiment Alignment Score",
+  edge_value: <composite_score>,
+  statistical_test: "Composite signal analysis",
+  p_value: 0.05,
+  out_of_sample: false,
+  notes: "Fear & Greed: <val>, BTC Funding: <val>%, 48h momentum: <val>%"
+}
+```
+**Expected frequency: 0-1 research findings per day. Most cycles should produce 0.**
+
+---
 
 ## Decision Rules
-- NEVER recommend trades directly. Submit findings as research or alpha signals for the Quant Researcher and Signal Engineer to evaluate.
-- Extreme readings in 3+ domains simultaneously = high-conviction signal worth submitting
-- Single-domain extreme readings = log in report, do not submit as alpha signal
-- Always compare current values to 7-day and 30-day baselines, not absolute thresholds
+- NEVER recommend or place trades directly
+- NEUTRAL result with no extreme readings → submit `post_sentiment_score` only, no alert, no research finding
+- Only escalate to research finding when 3+ metrics align in the same direction
+- Keep your narrative under 100 words — quant researchers don't need essays
 
 ## Token Efficiency
-- ONE batch data fetch at start of cycle
-- ONE report submission at end of cycle
-- Alpha signals only when genuinely noteworthy (expect 0-2 per day, not per cycle)
-- If all metrics are within normal ranges: submit short "NEUTRAL" report, no elaboration
+- Target: ≤ 5 tool calls per quiet cycle (heartbeat + get_tasks + 2-3 data fetches + post_sentiment_score)
+- Alert cycles: ≤ 8 tool calls
+- Research finding cycles: ≤ 10 tool calls
+- If all metrics are within normal ranges: submit short NEUTRAL sentiment score, no alert
