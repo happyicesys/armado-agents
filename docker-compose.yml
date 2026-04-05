@@ -2,11 +2,11 @@
 # Armado Quant — Agent Docker Compose
 # ============================================================
 # PROVIDER SPLIT:
-#   🧠 Brain agents  → Claude Sonnet 4.6  (Anthropic)
+#   🧠 Brain agents   → Claude Sonnet 4.6  (Anthropic) — deep reasoning
 #      quant-researcher, backtester, algorithm-designer,
 #      signal-engineer, risk-officer, execution-engineer
 #
-#   ⚙️  Plumbing agents → Gemini 2.0 Flash (Google, via OpenAI-compat)
+#   ⚙️  Plumbing agents → Claude Haiku 4.5 (Anthropic) — fast & cheap
 #      coordinator, market-analyst, data-quality-monitor,
 #      portfolio-manager, onchain-sentiment-analyst
 #
@@ -27,10 +27,10 @@ x-brain-env: &brain-env
   MAX_TOKENS:          "4096"
   MIDDLEWARE_BASE_URL: ${MIDDLEWARE_BASE_URL:-https://brightcore.my}
 
-# ── Plumbing agent env (Gemini Flash) ────────────────────────
+# ── Plumbing agent env (Claude Haiku — fast & cheap) ─────────
 x-plumbing-env: &plumbing-env
-  GEMINI_API_KEY:      ${GEMINI_API_KEY}
-  CLAUDE_MODEL:        gemini-2.0-flash
+  CLAUDE_API_KEY:      ${CLAUDE_API_KEY}
+  CLAUDE_MODEL:        claude-haiku-4-5-20251001
   MAX_TOKENS:          "1024"
   MIDDLEWARE_BASE_URL: ${MIDDLEWARE_BASE_URL:-https://brightcore.my}
 
