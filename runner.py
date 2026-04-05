@@ -239,7 +239,7 @@ TOOLS = [
                 "btc_24h_change_pct":     {"type": "number",  "description": "BTC 24h price change percent (e.g. -2.3)"},
                 "market_regime":          {"type": "string",  "description": "One of: BULL, BEAR, SIDEWAYS, VOLATILE"},
                 "risk_level":             {"type": "string",  "enum": ["LOW", "MEDIUM", "HIGH", "EXTREME"], "description": "Current market risk level"},
-                "funding_rate_btc":       {"type": "number",  "description": "BTC perpetual funding rate (optional)"},
+                "funding_rate_btc":       {"type": "number",  "description": "BTC perpetual funding rate as raw Binance decimal (e.g. 0.0001 means 0.01% per 8h). Do NOT multiply by 100 — store the raw value exactly as Binance returns it."},
                 "total_oi_change_1h_pct": {"type": "number",  "description": "Open interest 1h change pct (optional)"},
                 "notable_events":         {"type": "array",   "description": "List of notable market events (optional)"},
             },
@@ -476,7 +476,7 @@ TOOLS = [
     },
     {
         "name": "get_market_funding_rate",
-        "description": "Get BTC or ETH perpetual funding rate from Binance (cached 5 min). Useful for sentiment proxy — high positive = overleveraged longs, negative = overleveraged shorts.",
+        "description": "Get BTC or ETH perpetual funding rate from Binance (cached 5 min). Returns raw decimal e.g. 0.0001 = 0.01% per 8h. High positive (>0.0005) = overleveraged longs. Negative = overleveraged shorts. When storing to post_market_update, pass this raw value directly without multiplying by 100.",
         "input_schema": {
             "type": "object",
             "properties": {
