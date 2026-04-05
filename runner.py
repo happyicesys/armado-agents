@@ -197,6 +197,16 @@ TOOLS = [
         },
     },
     {
+        "name": "get_alerts",
+        "description": "Get active (unacknowledged) alerts. Use to check current system alerts and act on critical ones.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "severity": {"type": "string", "enum": ["INFO", "WARNING", "CRITICAL"], "description": "Filter by severity. Omit for all."},
+            },
+        },
+    },
+    {
         "name": "post_research_finding",
         "description": "Submit a quantitative research finding for the backtester to validate.",
         "input_schema": {
@@ -335,6 +345,9 @@ def execute_tool(name: str, inp: dict) -> str:
     elif name == "post_alert":
         inp.setdefault('agent_id', AGENT_ID)
         result = mw('POST', 'alerts', json=inp)
+
+    elif name == "get_alerts":
+        result = mw('GET', 'alerts', params=inp)
 
     elif name == "post_research_finding":
         inp.setdefault('agent_id', AGENT_ID)
