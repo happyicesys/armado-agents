@@ -317,6 +317,91 @@ TOOLS = [
             },
         },
     },
+    # ── Research & Backtest pipeline ─────────────────────────────────────────
+    {
+        "name": "get_research_findings",
+        "description": "List research findings. Backtester uses this to find findings awaiting backtest.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["submitted", "approved_for_backtest", "in_backtest", "promoted", "rejected"], "description": "Filter by status. Omit for all."},
+                "per_page": {"type": "integer", "description": "Results per page (default 20)"},
+            },
+        },
+    },
+    {
+        "name": "post_backtest_report",
+        "description": "Submit a backtest result for a research finding. Fetch research findings first with get_research_findings to get the UUID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "research_finding_id":  {"type": "string", "description": "UUID of the research finding (from get_research_findings)"},
+                "strategy_name":        {"type": "string", "description": "Human-readable strategy name, e.g. BTC_1H_FLASH_FLUSH_V1"},
+                "period_start":         {"type": "string", "description": "Backtest start date YYYY-MM-DD"},
+                "period_end":           {"type": "string", "description": "Backtest end date YYYY-MM-DD"},
+                "in_sample_sharpe":     {"type": "number", "description": "In-sample Sharpe ratio"},
+                "out_of_sample_sharpe": {"type": "number", "description": "Out-of-sample Sharpe ratio"},
+                "total_return_pct":     {"type": "number", "description": "Total return in percent"},
+                "max_drawdown_pct":     {"type": "number", "description": "Max drawdown in percent (positive, e.g. 12.5)"},
+                "win_rate":             {"type": "number", "description": "Win rate 0–100 (e.g. 55.3)"},
+                "profit_factor":        {"type": "number", "description": "Gross profit / Gross loss"},
+                "total_trades":         {"type": "integer", "description": "Total number of trades in backtest"},
+                "verdict":              {"type": "string", "enum": ["PASS", "FAIL", "NEEDS_MORE_DATA"]},
+                "notes":                {"type": "string"},
+            },
+            "required": ["research_finding_id", "strategy_name", "period_start", "period_end",
+                         "in_sample_sharpe", "out_of_sample_sharpe", "total_return_pct",
+                         "max_drawdown_pct", "win_rate", "profit_factor", "total_trades", "verdict"],
+        },
+    },
+    # ── Model Registry ───────────────────────────────────────────────────────
+    {
+        "name": "get_model_registry",
+        "description": "List models in the model registry. Signal Engineer uses this to find promoted models to build signals from.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "status": {"type": "string", "enum": ["candidate", "approved", "deprecated"], "description": "Filter by status. Omit for all."},
+            },
+        },
+    },
+    {
+        "name": "post_model_registry",
+        "description": "Register a trained model/strategy in the registry after a backtest PASS. Algorithm Designer calls this.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "strategy_name":        {"type": "string", "description": "Unique strategy name, e.g. BTC_1H_MEAN_REVERSION_V1"},
+                "model_type":           {"type": "string", "description": "e.g. RULE_BASED, ML_CLASSIFIER, ENSEMBLE"},
+                "feature_set":          {"type": "string", "description": "Feature set description, e.g. PRICE_VOLUME_OI"},
+                "feature_list":         {"type": "array",  "items": {"type": "string"}, "description": "List of feature names used"},
+                "hyperparameters":      {"type": "object", "description": "Key hyperparameters as object"},
+                "in_sample_sharpe":     {"type": "number"},
+                "out_of_sample_sharpe": {"type": "number"},
+                "notes":                {"type": "string"},
+            },
+            "required": ["strategy_name", "model_type", "feature_set", "feature_list", "hyperparameters", "in_sample_sharpe", "out_of_sample_sharpe"],
+        },
+    },
+    # ── Portfolio ────────────────────────────────────────────────────────────
+    {
+        "name": "get_portfolio_state",
+        "description": "Get current portfolio state: equity, open positions, deployed capital, circuit breaker status.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "update_signal_status",
+        "description": "Risk Officer uses this to approve or reject a pending trade signal.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "uuid":   {"type": "string", "description": "Signal UUID"},
+                "status": {"type": "string", "enum": ["APPROVED", "REJECTED_BY_RISK"], "description": "New status"},
+                "reason": {"type": "string", "description": "Reason for approval or rejection"},
+            },
+            "required": ["uuid", "status"],
+        },
+    },
 ]
 
 # ─── Tool execution (shared across all providers) ────────────────────────────
@@ -382,6 +467,27 @@ def execute_tool(name: str, inp: dict) -> str:
 
     elif name == "get_logs_summary":
         result = mw('GET', 'logs/summary', params=inp)
+
+    elif name == "get_research_findings":
+        result = mw('GET', 'research-findings', params=inp)
+
+    elif name == "post_backtest_report":
+        inp.setdefault('agent_id', AGENT_ID)
+        result = mw('POST', 'backtest-reports', json=inp)
+
+    elif name == "get_model_registry":
+        result = mw('GET', 'model-registry', params=inp)
+
+    elif name == "post_model_registry":
+        inp.setdefault('agent_id', AGENT_ID)
+        result = mw('POST', 'model-registry', json=inp)
+
+    elif name == "get_portfolio_state":
+        result = mw('GET', 'portfolio/state')
+
+    elif name == "update_signal_status":
+        uuid = inp.pop('uuid')
+        result = mw('PATCH', f'signals/{uuid}', json=inp)
 
     else:
         result = {'error': f'Unknown tool: {name}'}
