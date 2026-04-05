@@ -20,11 +20,11 @@ x-agent-defaults: &agent-defaults
   networks:
     - quant-net
 
-# ── Brain agent env (Claude Sonnet) ──────────────────────────
+# ── Brain agent env (Claude Haiku — rate-limit safe on free tier) ──
 x-brain-env: &brain-env
   CLAUDE_API_KEY:      ${CLAUDE_API_KEY}
-  CLAUDE_MODEL:        claude-sonnet-4-6
-  MAX_TOKENS:          "4096"
+  CLAUDE_MODEL:        claude-haiku-4-5-20251001
+  MAX_TOKENS:          "2048"
   MIDDLEWARE_BASE_URL: ${MIDDLEWARE_BASE_URL:-https://brightcore.my}
 
 # ── Plumbing agent env (Claude Haiku — fast & cheap) ─────────
@@ -109,8 +109,7 @@ services:
     ports:
       - "${ONCHAIN_SENTIMENT_PORT:-18810}:18800"
 
-  # ── 🧠 BRAIN AGENTS (Claude Sonnet 4.6) ────────────────────
-  # Staggered 60s apart — Anthropic rate limits are tighter
+  # ── 🧠 BRAIN AGENTS (Claude Haiku — 120s apart to stay under TPM) ──
 
   quant-researcher:
     <<: *agent-defaults
@@ -122,7 +121,7 @@ services:
       OPENCLAW_AGENT_ID:   quant-researcher
       OPENCLAW_AGENT_NAME: "Quant Researcher"
       MIDDLEWARE_API_KEY:  ${QUANT_RESEARCHER_API_KEY}
-      STARTUP_DELAY:       "60"
+      STARTUP_DELAY:       "150"
     ports:
       - "${QUANT_RESEARCHER_PORT:-18801}:18800"
 
@@ -136,7 +135,7 @@ services:
       OPENCLAW_AGENT_ID:   backtester
       OPENCLAW_AGENT_NAME: "Backtester"
       MIDDLEWARE_API_KEY:  ${BACKTESTER_API_KEY}
-      STARTUP_DELAY:       "120"
+      STARTUP_DELAY:       "270"
     ports:
       - "${BACKTESTER_PORT:-18802}:18800"
 
@@ -150,7 +149,7 @@ services:
       OPENCLAW_AGENT_ID:   algorithm-designer
       OPENCLAW_AGENT_NAME: "Algorithm Designer"
       MIDDLEWARE_API_KEY:  ${ALGORITHM_DESIGNER_API_KEY}
-      STARTUP_DELAY:       "180"
+      STARTUP_DELAY:       "390"
     ports:
       - "${ALGORITHM_DESIGNER_PORT:-18807}:18800"
 
@@ -164,7 +163,7 @@ services:
       OPENCLAW_AGENT_ID:   signal-engineer
       OPENCLAW_AGENT_NAME: "Signal Engineer"
       MIDDLEWARE_API_KEY:  ${SIGNAL_ENGINEER_API_KEY}
-      STARTUP_DELAY:       "240"
+      STARTUP_DELAY:       "510"
     ports:
       - "${SIGNAL_ENGINEER_PORT:-18804}:18800"
 
@@ -178,7 +177,7 @@ services:
       OPENCLAW_AGENT_ID:   risk-officer
       OPENCLAW_AGENT_NAME: "Risk Officer"
       MIDDLEWARE_API_KEY:  ${RISK_OFFICER_API_KEY}
-      STARTUP_DELAY:       "300"
+      STARTUP_DELAY:       "630"
     ports:
       - "${RISK_OFFICER_PORT:-18803}:18800"
 
@@ -192,7 +191,7 @@ services:
       OPENCLAW_AGENT_ID:   execution-engineer
       OPENCLAW_AGENT_NAME: "Execution Engineer"
       MIDDLEWARE_API_KEY:  ${EXECUTION_ENGINEER_API_KEY}
-      STARTUP_DELAY:       "360"
+      STARTUP_DELAY:       "750"
     ports:
       - "${EXECUTION_ENGINEER_PORT:-18805}:18800"
 
