@@ -112,11 +112,12 @@ TOOLS = [
     },
     {
         "name": "get_tasks",
-        "description": "Get tasks assigned to this agent.",
+        "description": "Get tasks. By default returns tasks assigned to this agent. Pass assigned_to to check another agent's queue (coordinator uses this to avoid duplicates).",
         "input_schema": {
             "type": "object",
             "properties": {
-                "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "failed"], "description": "Filter by status. Omit for all."},
+                "status":      {"type": "string", "enum": ["pending", "in_progress", "completed", "failed"], "description": "Filter by status. Omit for all."},
+                "assigned_to": {"type": "string", "description": "Agent ID to check. Defaults to this agent. Coordinator uses this to check other agents before creating tasks."},
             },
         },
     },
@@ -413,7 +414,7 @@ def execute_tool(name: str, inp: dict) -> str:
         result = mw('POST', 'agents/heartbeat')
 
     elif name == "get_tasks":
-        params = {'assigned_to': AGENT_ID}
+        params = {'assigned_to': inp.get('assigned_to', AGENT_ID)}
         if 'status' in inp:
             params['status'] = inp['status']
         result = mw('GET', 'tasks', params=params)
