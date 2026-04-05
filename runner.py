@@ -49,8 +49,9 @@ if PROVIDER == 'anthropic':
     import anthropic
     CLAUDE_API_KEY = os.environ['CLAUDE_API_KEY']
     llm = anthropic.Anthropic(api_key=CLAUDE_API_KEY)
-    MAX_TOKENS = int(os.environ.get('MAX_TOKENS', '4096'))  # brain agents need room to think
-    log.info(f"Provider: Anthropic | Model: {MODEL}")
+    MAX_TOKENS  = int(os.environ.get('MAX_TOKENS', '1024'))   # override per agent in docker-compose
+    MAX_ROUNDS  = int(os.environ.get('MAX_ROUNDS', '8'))       # override per agent; default 8
+    log.info(f"Provider: Anthropic | Model: {MODEL} | max_tokens={MAX_TOKENS} | max_rounds={MAX_ROUNDS}")
 
 elif PROVIDER == 'gemini':
     from openai import OpenAI as _OAI
@@ -59,15 +60,17 @@ elif PROVIDER == 'gemini':
         api_key=GEMINI_API_KEY,
         base_url='https://generativelanguage.googleapis.com/v1beta/openai/',
     )
-    MAX_TOKENS = int(os.environ.get('MAX_TOKENS', '1024'))  # plumbing agents are simple
-    log.info(f"Provider: Gemini (OpenAI-compat) | Model: {MODEL}")
+    MAX_TOKENS = int(os.environ.get('MAX_TOKENS', '512'))
+    MAX_ROUNDS = int(os.environ.get('MAX_ROUNDS', '6'))
+    log.info(f"Provider: Gemini (OpenAI-compat) | Model: {MODEL} | max_tokens={MAX_TOKENS} | max_rounds={MAX_ROUNDS}")
 
 elif PROVIDER == 'openai':
     from openai import OpenAI as _OAI
     OPENAI_API_KEY = os.environ['OPENAI_API_KEY']
     llm = _OAI(api_key=OPENAI_API_KEY)
-    MAX_TOKENS = int(os.environ.get('MAX_TOKENS', '1024'))
-    log.info(f"Provider: OpenAI | Model: {MODEL}")
+    MAX_TOKENS = int(os.environ.get('MAX_TOKENS', '512'))
+    MAX_ROUNDS = int(os.environ.get('MAX_ROUNDS', '6'))
+    log.info(f"Provider: OpenAI | Model: {MODEL} | max_tokens={MAX_TOKENS} | max_rounds={MAX_ROUNDS}")
 
 # ─── Workspace ───────────────────────────────────────────────────────────────
 
@@ -603,12 +606,13 @@ def run_cycle_anthropic(system_prompt: str):
     now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     user_message = (
         f"Agent: {AGENT_NAME} | ID: {AGENT_ID} | Time: {now}\n\n"
-        "Begin your cycle per your AGENTS.md instructions:\n"
-        "1. Call post_heartbeat first\n"
-        "2. Check for pending tasks assigned to you\n"
-        "3. Execute your scheduled duties or work on tasks\n"
-        "4. Update task statuses when done\n"
-        "Use tools to interact with the middleware. Be concise and efficient."
+        "Begin your cycle. IMPORTANT: Be maximally concise — use the minimum tool calls needed.\n"
+        "1. post_heartbeat\n"
+        "2. get_tasks (check yours)\n"
+        "3. Do exactly the work your AGENTS.md specifies — nothing more\n"
+        "4. Update task status when done\n"
+        "5. STOP. Do not over-analyse or chain extra calls beyond what is required.\n"
+        f"You have at most {MAX_ROUNDS} rounds. Exit as soon as your work is done."
     )
 
     anthropic_tools = [
@@ -616,8 +620,7 @@ def run_cycle_anthropic(system_prompt: str):
         for t in TOOLS
     ]
 
-    # Cache the system prompt — cached tokens don't count toward ITPM rate limits
-    # and are billed at 10% of normal price. Cache TTL is 5 minutes.
+    # Cache the system prompt — cached tokens are billed at 10% of normal price.
     cached_system = [
         {
             "type": "text",
@@ -627,7 +630,7 @@ def run_cycle_anthropic(system_prompt: str):
     ]
 
     messages = [{"role": "user", "content": user_message}]
-    max_rounds = 15
+    max_rounds = MAX_ROUNDS
 
     for _ in range(max_rounds):
         response = llm.messages.create(
@@ -685,16 +688,17 @@ def run_cycle_openai_compat(system_prompt: str):
             "role": "user",
             "content": (
                 f"Agent: {AGENT_NAME} | ID: {AGENT_ID} | Time: {now}\n\n"
-                "Begin your cycle per your AGENTS.md instructions:\n"
-                "1. Call post_heartbeat first\n"
-                "2. Check for pending tasks assigned to you\n"
-                "3. Execute your scheduled duties or work on tasks\n"
-                "4. Update task statuses when done\n"
-                "Use tools to interact with the middleware. Be concise and efficient."
+                "Begin your cycle. IMPORTANT: Be maximally concise — minimum tool calls.\n"
+                "1. post_heartbeat\n"
+                "2. get_tasks\n"
+                "3. Do exactly the work your AGENTS.md specifies — nothing more\n"
+                "4. Update task status\n"
+                "5. STOP immediately when done.\n"
+                f"You have at most {MAX_ROUNDS} rounds."
             ),
         },
     ]
-    max_rounds = 15
+    max_rounds = MAX_ROUNDS
 
     for _ in range(max_rounds):
         response = llm.chat.completions.create(

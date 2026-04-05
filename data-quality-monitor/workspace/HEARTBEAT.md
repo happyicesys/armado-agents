@@ -15,7 +15,7 @@ LOOP (every 30 minutes):
 ```
 
 ## Typical Triggers (sent by Coordinator)
-coordinator detects DEGRADED/CRITICAL status, scheduled check every 15 min (still runs itself — data quality is infrastructure)
+coordinator detects DEGRADED/CRITICAL status, scheduled check every 30 min (still runs itself — data quality is infrastructure)
 
 ## Token Budget Per Task
 - Target per task: < 200 tokens
@@ -23,7 +23,7 @@ coordinator detects DEGRADED/CRITICAL status, scheduled check every 15 min (stil
 - No mid-task check-ins to the middleware
 
 ## Exception — Self-Scheduling
-DATA QUALITY IS INFRASTRUCTURE. You run your full 6-domain check every 15 minutes regardless of Coordinator dispatch. This is the ONE agent that maintains its own heartbeat because catching bad data early protects the entire firm. Coordinator may also dispatch you for urgent checks.
+DATA QUALITY IS INFRASTRUCTURE. You run your full 6-domain check every 30 minutes regardless of Coordinator dispatch. This is the ONE agent that maintains its own heartbeat because catching bad data early protects the entire firm. Coordinator may also dispatch you for urgent checks.
 
 ## Why Task-Driven?
 The Coordinator monitors the full firm state every 5 minutes with a single API call (~80 tokens).

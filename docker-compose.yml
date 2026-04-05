@@ -20,18 +20,24 @@ x-agent-defaults: &agent-defaults
   networks:
     - quant-net
 
-# ── Brain agent env (Claude Haiku — rate-limit safe on free tier) ──
+# ── Brain agent env (Claude Haiku — research/backtest/risk) ─────────────────
+# MAX_TOKENS=1024: enough for structured JSON outputs; saves ~50% vs 2048
+# MAX_ROUNDS=8:    enough for task execution; was 15 (saves ~47% per cycle)
 x-brain-env: &brain-env
   CLAUDE_API_KEY:      ${CLAUDE_API_KEY}
   CLAUDE_MODEL:        claude-haiku-4-5-20251001
-  MAX_TOKENS:          "2048"
+  MAX_TOKENS:          "1024"
+  MAX_ROUNDS:          "8"
   MIDDLEWARE_BASE_URL: ${MIDDLEWARE_BASE_URL:-https://brightcore.my}
 
-# ── Plumbing agent env (Claude Haiku — fast & cheap) ─────────
+# ── Plumbing agent env (Claude Haiku — heartbeat/report/monitor) ─────────────
+# MAX_TOKENS=512:  polling agents only need short JSON posts
+# MAX_ROUNDS=6:    heartbeat + get_tasks + 2 actions + submit = 5-6 rounds
 x-plumbing-env: &plumbing-env
   CLAUDE_API_KEY:      ${CLAUDE_API_KEY}
   CLAUDE_MODEL:        claude-haiku-4-5-20251001
-  MAX_TOKENS:          "2048"
+  MAX_TOKENS:          "512"
+  MAX_ROUNDS:          "6"
   MIDDLEWARE_BASE_URL: ${MIDDLEWARE_BASE_URL:-https://brightcore.my}
 
 services:

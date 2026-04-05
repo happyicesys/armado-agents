@@ -3,11 +3,11 @@
 ## Mode: TASK-DRIVEN (event-driven, not polling)
 
 You do NOT run on a fixed polling timer. The Coordinator wakes you by assigning a task.
-Your only autonomous action is a lightweight keep-alive ping every 30 minutes.
+Your only autonomous action is a lightweight keep-alive ping every 60 minutes.
 
 ## Loop
 ```
-LOOP (every 30 minutes):
+LOOP (every 60 minutes):
   1. POST /api/agents/heartbeat                               ← keep-alive only
   2. GET /api/tasks?assigned_to=market-analyst&status=pending
      → If tasks found: work on them (see AGENTS.md for full procedure)
