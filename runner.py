@@ -230,16 +230,19 @@ TOOLS = [
     },
     {
         "name": "post_market_update",
-        "description": "Post a market observation or analysis update.",
+        "description": "Post a market status update. Must include BTC price and market regime. Called by market-analyst each cycle.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "symbol":      {"type": "string"},
-                "update_type": {"type": "string"},
-                "content":     {"type": "string"},
-                "data":        {"type": "object"},
+                "btc_price":              {"type": "number",  "description": "Current BTC price in USD"},
+                "btc_24h_change_pct":     {"type": "number",  "description": "BTC 24h price change percent (e.g. -2.3)"},
+                "market_regime":          {"type": "string",  "description": "One of: BULL, BEAR, SIDEWAYS, VOLATILE"},
+                "risk_level":             {"type": "string",  "enum": ["LOW", "MEDIUM", "HIGH", "EXTREME"], "description": "Current market risk level"},
+                "funding_rate_btc":       {"type": "number",  "description": "BTC perpetual funding rate (optional)"},
+                "total_oi_change_1h_pct": {"type": "number",  "description": "Open interest 1h change pct (optional)"},
+                "notable_events":         {"type": "array",   "description": "List of notable market events (optional)"},
             },
-            "required": ["symbol", "update_type", "content"],
+            "required": ["btc_price", "btc_24h_change_pct", "market_regime", "risk_level"],
         },
     },
     {
@@ -265,15 +268,21 @@ TOOLS = [
     },
     {
         "name": "post_data_quality",
-        "description": "Submit a data quality check result.",
+        "description": "Submit a data quality check result. Use UPPERCASE for status and overall_status.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "check_name": {"type": "string"},
-                "status":     {"type": "string", "enum": ["pass", "warn", "fail"]},
-                "details":    {"type": "object"},
+                "check_domain":       {"type": "string", "description": "Domain of the check, e.g. MARKET_DATA, PRICE_FEED, ON_CHAIN"},
+                "status":             {"type": "string", "enum": ["PASS", "WARN", "FAIL"], "description": "Result of this specific check (UPPERCASE)"},
+                "overall_status":     {"type": "string", "enum": ["HEALTHY", "DEGRADED", "CRITICAL"], "description": "Overall system data quality status (UPPERCASE)"},
+                "symbols_checked":    {"type": "integer", "description": "Number of symbols checked"},
+                "issues_found":       {"type": "integer", "description": "Number of issues found"},
+                "details":            {"type": "object",  "description": "Optional structured detail data"},
+                "api_latency_avg_ms": {"type": "number",  "description": "Average API latency in ms"},
+                "api_latency_max_ms": {"type": "number",  "description": "Max API latency in ms"},
+                "data_gap_count":     {"type": "integer", "description": "Number of data gaps detected"},
             },
-            "required": ["check_name", "status"],
+            "required": ["check_domain", "status", "overall_status"],
         },
     },
     {
@@ -354,6 +363,7 @@ def execute_tool(name: str, inp: dict) -> str:
         result = mw('POST', 'research-findings', json=inp)
 
     elif name == "post_market_update":
+        inp.setdefault('agent_id', AGENT_ID)
         result = mw('POST', 'market-updates', json=inp)
 
     elif name == "post_execution_report":
