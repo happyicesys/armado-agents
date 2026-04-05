@@ -369,7 +369,7 @@ def execute_tool(name: str, inp: dict) -> str:
 # ─── Agent cycle — Anthropic ─────────────────────────────────────────────────
 
 def run_cycle_anthropic(system_prompt: str):
-    """Brain agents: Claude Sonnet — deep reasoning, complex multi-step work."""
+    """All agents: Claude Haiku/Sonnet with prompt caching on system prompt."""
     now = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     user_message = (
         f"Agent: {AGENT_NAME} | ID: {AGENT_ID} | Time: {now}\n\n"
@@ -386,6 +386,16 @@ def run_cycle_anthropic(system_prompt: str):
         for t in TOOLS
     ]
 
+    # Cache the system prompt — cached tokens don't count toward ITPM rate limits
+    # and are billed at 10% of normal price. Cache TTL is 5 minutes.
+    cached_system = [
+        {
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
     messages = [{"role": "user", "content": user_message}]
     max_rounds = 15
 
@@ -393,7 +403,7 @@ def run_cycle_anthropic(system_prompt: str):
         response = llm.messages.create(
             model=MODEL,
             max_tokens=MAX_TOKENS,
-            system=system_prompt,
+            system=cached_system,
             tools=anthropic_tools,
             messages=messages,
         )
